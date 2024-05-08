@@ -1,0 +1,37 @@
+stage: edge_classifier
+model: GNNFilter
+dataset_class: GraphDataset
+input_dir: /pscratch/sd/h/hrzhao/cf/CTD_2023/metric_learning_0508/
+#/global/cfs/cdirs/m2616/pmtuan/inferred_data/metric_learning_11292882_redo/ # Should contain the files used in training and inference
+#input_dir: /pscratch/sd/a/alazar/cf/CTD_2023/metric_learning/ #
+stage_dir: /pscratch/sd/h/hrzhao/cf/CTD_2023/filter_0508/ # A directory to be created that will store logs, artifacts, and output data
+checkpoint: /global/cfs/cdirs/m4439/acorn_model_store/filter/best-23559332-epoch=55-auc=0.991695.ckpt
+project: CF_CHEP2022_Filter # Used in logging
+devices: 1
+accelerator: cuda
+nodes: 1
+
+data_split: [0, 10, 10]                 
+undirected: false
+hard_cuts: null
+num_workers: [10,10,10]
+
+edge_cut: 0.1
+
+gnn_config: [
+  {module_name: torch_geometric.nn, class_name: SAGEConv, init_kwargs: {in_channels: 37, out_channels: 256, }, inputs: [x, adj_t]},
+  {module_name: torch.nn, class_name: LayerNorm, init_kwargs: {normalized_shape: 256}, inputs: [x]},
+  {module_name: torch.nn, class_name: ReLU, init_kwargs: {}, inputs: [x]},
+
+  {module_name: torch_geometric.nn, class_name: SAGEConv, init_kwargs: {in_channels: 256, out_channels: 512, }, inputs: [x, adj_t]},
+  {module_name: torch.nn, class_name: LayerNorm, init_kwargs: {normalized_shape: 512}, inputs: [x]},
+  {module_name: torch.nn, class_name: ReLU, init_kwargs: {}, inputs: [x]},
+
+  {module_name: torch_geometric.nn, class_name: SAGEConv, init_kwargs: {in_channels: 512, out_channels: 1024, }, inputs: [x, adj_t]},
+  {module_name: torch.nn, class_name: LayerNorm, init_kwargs: {normalized_shape: 1024}, inputs: [x]},
+  {module_name: torch.nn, class_name: ReLU, init_kwargs: {}, inputs: [x]},
+]
+transform: [
+  {module_name: torch_geometric.transforms, class_name: ToSparseTensor, init_kwargs: {remove_edge_index: false}}
+]
+

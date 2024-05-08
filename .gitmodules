@@ -1,0 +1,3 @@
+[submodule "acorn"]
+	path = acorn
+	url = ssh://git@gitlab.cern.ch:7999/gnn4itkteam/acorn.git
