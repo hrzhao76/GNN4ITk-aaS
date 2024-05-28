@@ -1,0 +1,31 @@
+name: "GNN4ITk_MM_Infer"
+backend: "python"
+
+input [
+  {
+    name: "EVENT_ID"
+    data_type: TYPE_STRING
+    dims: [1]
+  }
+]
+
+output [
+  {
+    name: "HIT_IDs"
+    data_type: TYPE_INT32
+    dims: [-1]
+  },
+  {
+    name: "TRACK_IDs"
+    data_type: TYPE_INT32
+    dims: [-1]
+  }
+]
+
+instance_group [
+  {
+    kind: KIND_GPU
+  }
+]
+
+max_batch_size: 0
