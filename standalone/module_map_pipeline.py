@@ -2,6 +2,8 @@ import torch
 import pandas as pd 
 import numpy as np
 
+from acorn.stages.data_reading.data_reading_stage import EventReader
+
 from acorn.stages.graph_construction.graph_construction_stage import EventDataset
 from acorn.stages.graph_construction.models.py_module_map import PyModuleMap
 
@@ -22,6 +24,27 @@ class GNNMMInferencePipeline():
 
         torch.set_float32_matmul_precision("highest")
         torch.set_grad_enabled(False)
+        confif_eventreader = {
+            "feature_sets":{
+                "hit_features": ["hit_id", "x", "y", "z", "r", "phi", "eta", "region", "module_id",
+                            "cluster_x_1", "cluster_y_1", "cluster_z_1", "cluster_x_2", "cluster_y_2", "cluster_z_2",
+                            "cluster_r_1", "cluster_phi_1", "cluster_eta_1", "cluster_r_2", "cluster_phi_2", "cluster_eta_2",
+                            "norm_x_1", "norm_y_1", "norm_x_2", "norm_y_2", "norm_z_1", 
+                            "eta_angle_1", "phi_angle_1", "eta_angle_2", "phi_angle_2", "norm_z_2"],
+
+                "track_features": ["particle_id", "pt", "radius", "primary", "nhits", "pdgId", "eta_particle", "redundant_split_edges"]
+            },
+            "region_labels":{
+                1: {'hardware': 'PIXEL', 'barrel_endcap': -2},
+                2: {'hardware': 'STRIP', 'barrel_endcap': -2},
+                3: {'hardware': 'PIXEL', 'barrel_endcap': 0},
+                4: {'hardware': 'STRIP', 'barrel_endcap': 0},
+                5: {'hardware': 'PIXEL', 'barrel_endcap': 2},
+                6: {'hardware': 'STRIP', 'barrel_endcap': 2}
+            }
+        }
+        self.reader = EventReader(config=confif_eventreader)
+
         hparams_mm = {
             "accelerator" : "gpu",
             "module_map_path": f"{workdir}/models/MMtriplet_1GeV_3hits_noE__merged__sorted.txt",
@@ -73,7 +96,42 @@ class GNNMMInferencePipeline():
         hits = pd.read_csv(csv_truth_path)
         return graph, hits 
 
+    def load_data_csvonly(self, particles_path, truth_path):
+        particles = pd.read_csv(particles_path)
+        hits = pd.read_csv(truth_path)
 
+        particles = particles.rename(columns={"eta": "eta_particle"})
+        hits, particles = self.reader._merge_particles_to_hits(hits, particles)
+        hits = self.reader._add_handengineered_features(hits)
+        hits = self.reader._clean_noise_duplicates(hits)
+        # wrong reader.. 
+        # fixed at https://gitlab.cern.ch/gnn4itkteam/acorn/-/commit/b20821c336ea63b3aadc03fd018178d50175dc16#9b834450698a186cdf44d4557ac48cf865a1b1f2_314_312
+        # not able to run with the dev branch because of MM1 not found 
+        for i in [1, 2]:
+            hits[f"cluster_r_{i}"] = np.sqrt(
+                hits[f"cluster_x_{i}"] ** 2 + hits[f"cluster_y_{i}"] ** 2
+                )
+            hits[f"cluster_phi_{i}"] = np.arctan2(
+                hits[f"cluster_y_{i}"],
+                hits[f"cluster_x_{i}"],
+                )
+            
+            hits[f"cluster_eta_{i}"] = self.calc_eta(
+                hits[f"cluster_r_{i}"],
+                hits[f"cluster_z_{i}"],
+                )
+        
+        tracks, track_features, hits = self.reader._build_true_tracks(hits)
+        hits, particles, tracks = self.reader._custom_processing(hits, particles, tracks)
+        graph = self.reader._build_graph(hits, tracks, track_features, "005000001")
+
+        return graph, hits 
+    
+    @staticmethod
+    def calc_eta(r, z):
+        theta = np.arctan2(r, z)
+        return -1.0 * np.log(np.tan(theta / 2.0))
+    
     def forward(self, graph, hits):
         # graph construction
         print("[Module Map]: building graphs...")
@@ -104,6 +162,10 @@ class GNNMMInferencePipeline():
     def infer(self, graph_path, csv_truth_path):
         graph, hits  = self.load_data(graph_path, csv_truth_path)
         return self.forward(graph, hits)
+    
+    def infer_csvonly(self, particles_path, csv_truth_path):
+        graph, hits  = self.load_data_csvonly(particles_path, csv_truth_path)
+        return self.forward(graph, hits)
 
 if __name__ == '__main__':
     event_name = 'event005000001'
@@ -112,4 +174,9 @@ if __name__ == '__main__':
     input_folder = f"{pipeline.workdir}/data/{data_name}/"
     graph_path = input_folder + f"{event_name}-graph.pyg"
     csv_truth_path = input_folder + f"{event_name}-truth.csv"
-    pipeline.infer(graph_path, csv_truth_path)
+    particles_path = input_folder + f"{event_name}-particles.csv"
+    # tracks = pipeline.infer(graph_path, csv_truth_path)
+    
+    tracks = pipeline.infer_csvonly(particles_path, csv_truth_path)
+
+    print(f"Length of the tracks: {len(tracks)}")
