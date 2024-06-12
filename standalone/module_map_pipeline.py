@@ -99,7 +99,29 @@ class GNNMMInferencePipeline():
     def load_data_csvonly(self, particles_path, truth_path):
         particles = pd.read_csv(particles_path)
         hits = pd.read_csv(truth_path)
+        hit_features = [
+            'hardware', 'barrel_endcap', 'layer_disk', 
+            'eta_module', 'phi_module', 'module_id', 'region',
+            'hit_id', 'x', 'y', 'z', 'particle_id', 
+            'cluster_index_1', 'cluster_x_1', 'cluster_y_1', 'cluster_z_1',
+            # 'norm_x_1', 'norm_y_1', 'norm_z_1', 'particle_id_1',
+            'cluster_index_2', 'cluster_x_2', 'cluster_y_2', 'cluster_z_2', 
+            # 'norm_x_2', 'norm_y_2', 'norm_z_2', 'particle_id_2',
+            ]
+        particle_features = [
+            'particle_id', 
+            'subevent', 'barcode', 
+            'px', 'py', 'pz', 'pt', 'eta',
+            'vx', 'vy', 'vz', 
+            'radius', 'status', 'charge', 
+            'pdgId',
+        ]
 
+        hits = hits[hit_features]
+        particles = particles[particle_features]
+        return hits, particles
+    
+    def convert_pyG(self, hits, particles, event_id = '005000001'):
         particles = particles.rename(columns={"eta": "eta_particle"})
         hits, particles = self.reader._merge_particles_to_hits(hits, particles)
         hits = self.reader._add_handengineered_features(hits)
@@ -123,10 +145,10 @@ class GNNMMInferencePipeline():
         
         tracks, track_features, hits = self.reader._build_true_tracks(hits)
         hits, particles, tracks = self.reader._custom_processing(hits, particles, tracks)
-        graph = self.reader._build_graph(hits, tracks, track_features, "005000001")
+        graph = self.reader._build_graph(hits, tracks, track_features, event_id)
 
         return graph, hits 
-    
+
     @staticmethod
     def calc_eta(r, z):
         theta = np.arctan2(r, z)
@@ -163,8 +185,9 @@ class GNNMMInferencePipeline():
         graph, hits  = self.load_data(graph_path, csv_truth_path)
         return self.forward(graph, hits)
     
-    def infer_csvonly(self, particles_path, csv_truth_path):
-        graph, hits  = self.load_data_csvonly(particles_path, csv_truth_path)
+    def infer_csvonly(self, particles_path, csv_truth_path): 
+        hits, particles = self.load_data_csvonly(particles_path, csv_truth_path)
+        graph, hits  = self.convert_pyG(hits, particles)
         return self.forward(graph, hits)
 
 if __name__ == '__main__':
