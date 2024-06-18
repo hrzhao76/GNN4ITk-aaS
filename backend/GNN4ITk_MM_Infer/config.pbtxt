@@ -1,11 +1,27 @@
 name: "GNN4ITk_MM_Infer"
 backend: "python"
+platform: "python"
 
 input [
   {
     name: "EVENT_ID"
     data_type: TYPE_STRING
     dims: [1]
+  },
+  {
+    name: "FEATURE_HITS_HARDWARE"
+    data_type: TYPE_STRING
+    dims: [-1, 1]
+  },
+  {
+    name: "FEATURES_HITS"
+    data_type: TYPE_FP64
+    dims: [-1, 19]
+  },
+  {
+    name: "FEATURES_PARTICLES"
+    data_type: TYPE_FP64
+    dims: [-1, 15]
   }
 ]
 

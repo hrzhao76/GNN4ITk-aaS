@@ -122,6 +122,51 @@ class TritonPythonModel:
         self.model_config = model_config = json.loads(args["model_config"])
         self.pipeline = GNNMMInferencePipeline()
 
+        # Extract hits inputs
+        self.hit_dtype_dict = {
+                'hardware': 'object',
+                'barrel_endcap': 'int64',
+                'layer_disk': 'int64',
+                'eta_module': 'int64',
+                'phi_module': 'int64',
+                'module_id': 'int64',
+                'region': 'float64',
+                'hit_id': 'int64',
+                'x': 'float64',
+                'y': 'float64',
+                'z': 'float64',
+                'particle_id': 'int64',
+                'cluster_index_1': 'int64',
+                'cluster_x_1': 'float64',
+                'cluster_y_1': 'float64',
+                'cluster_z_1': 'float64',
+                'cluster_index_2': 'int64',
+                'cluster_x_2': 'float64',
+                'cluster_y_2': 'float64',
+                'cluster_z_2': 'float64'
+            }
+        self.hit_feature_names = [*self.hit_dtype_dict.keys()]
+
+        # Extract particles inputs
+        self.particle_dtype_dict = {
+                'particle_id': 'int64',
+                'subevent': 'int64',
+                'barcode': 'int64',
+                'px': 'float64',
+                'py': 'float64',
+                'pz': 'float64',
+                'pt': 'float64',
+                'eta': 'float64',
+                'vx': 'float64',
+                'vy': 'float64',
+                'vz': 'float64',
+                'radius': 'float64',
+                'status': 'int64',
+                'charge': 'float64',
+                'pdgId': 'int64'
+            }
+        self.particle_feature_names = [*self.particle_dtype_dict.keys()]
+
     def execute(self, requests):
         """`execute` must be implemented in every Python model. `execute`
         function receives a list of pb_utils.InferenceRequest as the only
@@ -150,33 +195,50 @@ class TritonPythonModel:
         # overridden in subsequent inference requests. You can make a copy of
         # the underlying NumPy array and store it if it is required.
         for request in requests:
-            # Perform inference on the request and append it to responses
-            # Extract the input tensor from the request
-            input0 = pb_utils.get_input_tensor_by_name(request, "EVENT_ID")
-            # Convert input tensor to event name
-            event_name = input0.as_numpy()[0].decode('utf-8')
-            
-            input_folder = f"{self.pipeline.workdir}/data/{self.pipeline.data_name}/"
-            graph_path = input_folder + f"{event_name}-graph.pyg"
-            csv_truth_path = input_folder + f"{event_name}-truth.csv"
+            try:
+                # Extract the input tensor from the request
+                input0 = pb_utils.get_input_tensor_by_name(request, "EVENT_ID")
+                # Convert input tensor to event name
+                event_id = input0.as_numpy()[0].decode('utf-8')
 
-            # Perform the forward pass of the model
-            tracks = self.pipeline.infer(graph_path, csv_truth_path)
+                input1 = pb_utils.get_input_tensor_by_name(request, "FEATURE_HITS_HARDWARE")
+                feature_hit_hardware = np.char.decode(input1.as_numpy().astype(np.bytes_), 'utf-8')
 
-            # Create the output tensors
-            track_lengths = [len(track) for track in tracks]
-            hits = np.concatenate(tracks)
-            track_ids = np.repeat(np.arange(1, len(tracks) + 1), track_lengths)
+                input2 = pb_utils.get_input_tensor_by_name(request, "FEATURES_HITS")
+                feature_hits = input2.as_numpy()
 
-            output0 = pb_utils.Tensor("HIT_IDs", hits.astype(np.int32))
-            output1 = pb_utils.Tensor("TRACK_IDs", track_ids.astype(np.int32))
+                input3 = pb_utils.get_input_tensor_by_name(request, "FEATURES_PARTICLES")
+                feature_particles = input3.as_numpy()
 
-            # Create InferenceResponse and append it to responses
-            inference_response = pb_utils.InferenceResponse(output_tensors=[output0, output1])
-            responses.append(inference_response)
+                # Create DataFrames from the data
+                hardware_df = pd.DataFrame(feature_hit_hardware, columns=['hardware'])
+                hits_df = pd.DataFrame(feature_hits, columns=self.hit_feature_names[1:])
+                hits = pd.concat([hardware_df, hits_df], axis=1)
 
-        # You must return a list of pb_utils.InferenceResponse. Length
-        # of this list must match the length of `requests` list.
+                particles = pd.DataFrame(feature_particles, columns=self.particle_feature_names)
+
+                hits = hits.astype(self.hit_dtype_dict)
+                particles = particles.astype(self.particle_dtype_dict)
+                
+                # Assuming you have a self.pipeline object with convert_pyG and forward methods
+                graph, hits = self.pipeline.convert_pyG(hits, particles, event_id)
+                tracks = self.pipeline.forward(graph, hits)
+
+                # Process tracks to create output tensors
+                track_lengths = [len(track) for track in tracks]
+                hits = np.concatenate(tracks)
+                track_ids = np.repeat(np.arange(1, len(tracks) + 1), track_lengths)
+
+                output0 = pb_utils.Tensor("HIT_IDs", hits.astype(np.int32))
+                output1 = pb_utils.Tensor("TRACK_IDs", track_ids.astype(np.int32))
+
+                # Create InferenceResponse and append it to responses
+                inference_response = pb_utils.InferenceResponse(output_tensors=[output0, output1])
+                responses.append(inference_response)
+            except Exception as e:
+                # If an error occurs, create an InferenceResponse with the error
+                inference_response = pb_utils.InferenceResponse(error=pb_utils.TritonError(str(e)))
+                responses.append(inference_response)
         return responses
 
     def finalize(self):
