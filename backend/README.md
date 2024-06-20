@@ -10,7 +10,7 @@ The backend operates by receiving a string representing the event ID from the cl
 podman-hpc pull hrzhao076/gnn4itk-aas:v0.1
 
 # start the server 
-podman-hpc run -it --gpu --rm --shm-size=2g -p8000:8000 -p8001:8001 -p8002:8002 -v ${PWD}:/workspace/ -v /global/cfs/cdirs/m3443/data/GNN4ITk-aaS/dev_mm/:/global/cfs/cdirs/m3443/data/GNN4ITk-aaS/dev_mm/ hrzhao076/gnn4itk-aas:v0.1 /bin/bash 
+podman-hpc run -it --gpu --rm --shm-size=2g -p8000:8000 -p8001:8001 -p8002:8002 -v ${PWD}:/workspace/ -v /global/cfs/cdirs/m3443/data/GNN4ITk-aaS/dev_mm/:/global/cfs/cdirs/m3443/data/GNN4ITk-aaS/dev_mm/ hrzhao076/gnn4itk-aas:v0.1 /bin/bash
 
 # inside the container
 tritonserver --model-repository=/workspace/backend/
@@ -19,7 +19,7 @@ tritonserver --model-repository=/workspace/backend/
 ### Client
 ``` bash 
 # client 
-podman-hpc run -it --rm --net=host -v ${PWD}:/workspace/ nvcr.io/nvidia/tritonserver:24.04-py3-sdk /bin/bash 
+podman-hpc run -it --rm --net=host -v ${PWD}:/workspace/ nvcr.io/nvidia/tritonserver:24.04-py3-sdk -v /global/cfs/cdirs/m3443/data/GNN4ITk-aaS/dev_mm/:/global/cfs/cdirs/m3443/data/GNN4ITk-aaS/dev_mm/ /bin/bash
 
 python /workspace/backend/GNN4ITk_MM_Infer/client.py
 

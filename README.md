@@ -19,5 +19,8 @@ pip install git+https://github.com/xju2/FRNN.git
 ``` bash
 export project_dir=/global/homes/h/hrzhao/Projects/GNN4ITk-aaS
 export data_dir=/global/cfs/cdirs/m3443/data/GNN4ITk-aaS/CTD2023
+
+# a small dataset 
+# /global/cfs/cdirs/m3443/data/GNN4ITk-aaS/dev_mm/data/testset/
 ```
 

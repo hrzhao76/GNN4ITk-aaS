@@ -11,7 +11,7 @@ from acorn.stages.edge_classifier.edge_classifier_stage import GraphDataset
 from acorn.stages.edge_classifier import InteractionGNN2
 from torch_geometric.data import Data, Batch
 
-from acorn.stages.track_building import ConnectedComponents
+from acorn.stages.track_building import ConnectedComponents, CCandWalk
 from acorn.stages.track_building.utils import load_reconstruction_df
 
 class GNNMMInferencePipeline():
@@ -89,7 +89,9 @@ class GNNMMInferencePipeline():
             hparams= hparams_gnn,
         )
 
-        self.track_builder_cc = ConnectedComponents({})
+        self.track_builder = ConnectedComponents({})
+        # AttributeError: 'CCandWalk' object has no attribute '_build_event'
+        # self.track_builder = CCandWalk({})
 
     def load_data(self, graph_path, csv_truth_path):
         graph = torch.load(graph_path)
@@ -169,8 +171,8 @@ class GNNMMInferencePipeline():
         event.scores = scores.detach()
 
         event.to('cpu')
-        print("[Track building CC:]: building...")
-        graph = self.track_builder_cc._build_event(event)
+        print("[Track building:]: building...")
+        graph = self.track_builder._build_event(event)
         d = load_reconstruction_df(graph)
         # include distance from origin to sort hits
         d["r2"] = (graph.r**2 + graph.z**2).cpu().numpy()
@@ -191,10 +193,10 @@ class GNNMMInferencePipeline():
         return self.forward(graph, hits)
 
 if __name__ == '__main__':
-    event_name = 'event005000001'
-    data_name ='trainset'
+    event_name = 'event005000901'
+    data_name ='testset'
     pipeline = GNNMMInferencePipeline(mm_batch_size=1000000)
-    input_folder = f"{pipeline.workdir}/data/{data_name}/"
+    input_folder = f"/global/cfs/cdirs/m3443/data/GNN4ITk-aaS/CTD2023/ATLAS-P2-ITK-23-00-03_Rel.21.9/ttbar/feature_store/{data_name}/"
     graph_path = input_folder + f"{event_name}-graph.pyg"
     csv_truth_path = input_folder + f"{event_name}-truth.csv"
     particles_path = input_folder + f"{event_name}-particles.csv"
@@ -203,3 +205,4 @@ if __name__ == '__main__':
     tracks = pipeline.infer_csvonly(particles_path, csv_truth_path)
 
     print(f"Length of the tracks: {len(tracks)}")
+    tracks.to_csv(f"{event_name}_reco_trks.txt")

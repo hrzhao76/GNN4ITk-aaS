@@ -1,0 +1,13 @@
+# CommonFramework configuration
+stage: graph_construction
+model: PyModuleMap
+input_dir: /global/cfs/cdirs/m3443/data/GNN4ITk-aaS/dev_mm/data/
+stage_dir: /global/cfs/cdirs/m3443/data/GNN4ITk-aaS/dev_mm/stages_files/module_map/
+accelerator: gpu
+
+# Dataset parameters
+data_split: [1, 1, 1] # Number of [training, validation, testing] examples
+module_map_path: /global/cfs/cdirs/m3443/data/GNN4ITk-aaS/dev_mm/models/MMtriplet_1GeV_3hits_noE__merged__sorted.txt
+batch_size: 500000
+
+max_workers: 16
