@@ -1,6 +1,6 @@
 # Reproduction 
 
-This folder utilizes the classic ACORN style to perform analyses on three distinct events, demonstrating outputs identical to those of the standalone version. It features an abstracted Python class, `[module_map_pipeline.py](module_map_pipeline.py)`, which encapsulates the essential inference code, bypassing any intermediate stage files I/O to the disk.    
+This folder utilizes the classic ACORN style to perform analyses on three distinct events, demonstrating outputs identical to those of the standalone version. It features an abstracted Python class, [module_map_pipeline.py](../standalone/module_map_pipeline.py), which encapsulates the essential inference code, bypassing any intermediate stage files I/O to the disk.    
 
 ``` bash 
 cp -r /../acorn/examples/CTD_2023/*.yaml ./CTD2023
