@@ -15,91 +15,6 @@ class TritonPythonModel:
     """Your Python model must use the same class name. Every Python model
     that is created must have "TritonPythonModel" as the class name.
     """
-
-    @staticmethod
-    def auto_complete_config(auto_complete_model_config):
-        """`auto_complete_config` is called only once when loading the model
-        assuming the server was not started with
-        `--disable-auto-complete-config`. Implementing this function is
-        optional. No implementation of `auto_complete_config` will do nothing.
-        This function can be used to set `max_batch_size`, `input` and `output`
-        properties of the model using `set_max_batch_size`, `add_input`, and
-        `add_output`. These properties will allow Triton to load the model with
-        minimal model configuration in absence of a configuration file. This
-        function returns the `pb_utils.ModelConfig` object with these
-        properties. You can use the `as_dict` function to gain read-only access
-        to the `pb_utils.ModelConfig` object. The `pb_utils.ModelConfig` object
-        being returned from here will be used as the final configuration for
-        the model.
-
-        Note: The Python interpreter used to invoke this function will be
-        destroyed upon returning from this function and as a result none of the
-        objects created here will be available in the `initialize`, `execute`,
-        or `finalize` functions.
-
-        Parameters
-        ----------
-        auto_complete_model_config : pb_utils.ModelConfig
-          An object containing the existing model configuration. You can build
-          upon the configuration given by this object when setting the
-          properties for this model.
-
-        Returns
-        -------
-        pb_utils.ModelConfig
-          An object containing the auto-completed model configuration
-        """
-        inputs = [{
-            'name': 'EVENT_ID',
-            'data_type': 'TYPE_STRING',
-            'dims': [1]
-        }]
-        outputs = [{
-            'name': 'HIT_IDs',
-            'data_type': 'TYPE_INT32',
-            'dims': [-1]
-        }, {
-            'name': 'TRACK_IDs',
-            'data_type': 'TYPE_INT32',
-            'dims': [-1]
-        }]
-
-        # Demonstrate the usage of `as_dict`, `add_input`, `add_output`,
-        # `set_max_batch_size`, and `set_dynamic_batching` functions.
-        # Store the model configuration as a dictionary.
-        config = auto_complete_model_config.as_dict()
-        input_names = []
-        output_names = []
-        for input in config['input']:
-            input_names.append(input['name'])
-        for output in config['output']:
-            output_names.append(output['name'])
-
-        for input in inputs:
-            # The name checking here is only for demonstrating the usage of
-            # `as_dict` function. `add_input` will check for conflicts and
-            # raise errors if an input with the same name already exists in
-            # the configuration but has different data_type or dims property.
-            if input['name'] not in input_names:
-                auto_complete_model_config.add_input(input)
-        for output in outputs:
-            # The name checking here is only for demonstrating the usage of
-            # `as_dict` function. `add_output` will check for conflicts and
-            # raise errors if an output with the same name already exists in
-            # the configuration but has different data_type or dims property.
-            if output['name'] not in output_names:
-                auto_complete_model_config.add_output(output)
-
-        auto_complete_model_config.set_max_batch_size(0)
-
-        # To enable a dynamic batcher with default settings, you can use
-        # auto_complete_model_config set_dynamic_batching() function. It is
-        # commented in this example because the max_batch_size is zero.
-        #
-        # auto_complete_model_config.set_dynamic_batching()
-
-        return auto_complete_model_config
-
     def initialize(self, args):
         """`initialize` is called only once when the model is being loaded.
         Implementing `initialize` function is optional. This function allows
@@ -119,9 +34,15 @@ class TritonPythonModel:
         """
         print('Initialized...')
 
-        self.model_config = model_config = json.loads(args["model_config"])
-        self.pipeline = GNNMMInferencePipeline()
+        self.model_config = json.loads(args["model_config"])
+        self.mm_batch_size = int(self.model_config["parameters"]["mm_batch_size"]["string_value"])
+        print(f"mm_batch_size: {self.mm_batch_size}")
+        self.pipeline = GNNMMInferencePipeline(mm_batch_size=self.mm_batch_size)
 
+        self.hit_hardware_decode = {
+            0: "PIXEL",
+            1: "STRIP"
+        }
         # Extract hits inputs
         self.hit_dtype_dict = {
                 'hardware': 'object',
@@ -196,32 +117,23 @@ class TritonPythonModel:
         # the underlying NumPy array and store it if it is required.
         for request in requests:
             try:
-                # Extract the input tensor from the request
-                input0 = pb_utils.get_input_tensor_by_name(request, "EVENT_ID")
-                # Convert input tensor to event name
-                event_id = input0.as_numpy()[0].decode('utf-8')
+                features_hits = pb_utils.get_input_tensor_by_name(request, "FEATURES_HITS")
+                features_hits = features_hits.as_numpy()
 
-                input1 = pb_utils.get_input_tensor_by_name(request, "FEATURE_HITS_HARDWARE")
-                feature_hit_hardware = np.char.decode(input1.as_numpy().astype(np.bytes_), 'utf-8')
-
-                input2 = pb_utils.get_input_tensor_by_name(request, "FEATURES_HITS")
-                feature_hits = input2.as_numpy()
-
-                input3 = pb_utils.get_input_tensor_by_name(request, "FEATURES_PARTICLES")
-                feature_particles = input3.as_numpy()
-
+                features_particles = pb_utils.get_input_tensor_by_name(request, "FEATURES_PARTICLES")
+                features_particles = features_particles.as_numpy()
+                
                 # Create DataFrames from the data
-                hardware_df = pd.DataFrame(feature_hit_hardware, columns=['hardware'])
-                hits_df = pd.DataFrame(feature_hits, columns=self.hit_feature_names[1:])
-                hits = pd.concat([hardware_df, hits_df], axis=1)
+                hits_df = pd.DataFrame(features_hits, columns=self.hit_feature_names)
 
-                particles = pd.DataFrame(feature_particles, columns=self.particle_feature_names)
+                hits_df['hardware'] = hits_df['hardware'].apply(lambda x: self.hit_hardware_decode[x])
+                particles = pd.DataFrame(features_particles, columns=self.particle_feature_names)
 
-                hits = hits.astype(self.hit_dtype_dict)
+                hits = hits_df.astype(self.hit_dtype_dict)
                 particles = particles.astype(self.particle_dtype_dict)
                 
                 # Assuming you have a self.pipeline object with convert_pyG and forward methods
-                graph, hits = self.pipeline.convert_pyG(hits, particles, event_id)
+                graph, hits = self.pipeline.convert_pyG(hits, particles)
                 tracks = self.pipeline.forward(graph, hits)
 
                 # Process tracks to create output tensors

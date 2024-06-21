@@ -26,16 +26,6 @@ def load_data(particles_path, truth_path):
     particles = particles[particle_features]
     return hits, particles
 
-def convert_dtype(dataframe):
-    converted_df = dataframe.copy()
-    for col in dataframe.columns:
-        if dataframe[col].dtype == 'object':
-            converted_df[col] = dataframe[col].astype('bytes')
-        elif dataframe[col].dtype == 'int64':
-            converted_df[col] = dataframe[col].astype('int64')  # Ensure int64 remains int64
-        elif dataframe[col].dtype == 'float64':
-            converted_df[col] = dataframe[col].astype('float64')  # Ensure float64 remains float64
-    return converted_df
 
 def main():
     # Create Triton client
@@ -51,26 +41,19 @@ def main():
     truth_path = workdir / data_name / f"{event_name}-truth.csv" 
     hits, particles = load_data(particles_path, truth_path)
 
+    hit_hardware_dict = {
+        "PIXEL" : 0,
+        "STRIP" : 1
+    }
+
+    hits["hardware"] = hits["hardware"].apply(lambda x: hit_hardware_dict[x])
     # Prepare input data
     inputs = []
-    inputs.append(grpcclient.InferInput("EVENT_ID", [1], "BYTES"))
-
-    # Convert input data to appropriate types
-    input_data_event_id = np.array([event_name], dtype=np.object_)
-    inputs[0].set_data_from_numpy(input_data_event_id)
-
-    feature_hit_hardware = hits.pop('hardware')
-    inputs.append(grpcclient.InferInput("FEATURE_HITS_HARDWARE", [len(feature_hit_hardware), 1], "BYTES"))
-    feature_hit_hardware_data = np.array(feature_hit_hardware.values, dtype=np.object_).reshape(-1, 1)
-    inputs[1].set_data_from_numpy(feature_hit_hardware_data)
-
-    hits = convert_dtype(hits)
     inputs.append(grpcclient.InferInput("FEATURES_HITS", hits.shape, "FP64"))
-    inputs[2].set_data_from_numpy(hits.values.astype(np.float64))
+    inputs[0].set_data_from_numpy(hits.values.astype(np.float64))
 
-    particles = convert_dtype(particles)
     inputs.append(grpcclient.InferInput("FEATURES_PARTICLES", particles.shape, "FP64"))
-    inputs[3].set_data_from_numpy(particles.values.astype(np.float64))
+    inputs[1].set_data_from_numpy(particles.values.astype(np.float64))
 
     # Set up output
     outputs = []

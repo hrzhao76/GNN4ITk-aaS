@@ -58,7 +58,7 @@ class GNNMMInferencePipeline():
         self.event_mm = EventDataset(
             input_dir = hparams_mm['input_dir'],
             data_name = data_name,
-            num_events = 1,
+            num_events = 0,
             use_csv = True,
             hparams=hparams_mm)
         
@@ -123,7 +123,7 @@ class GNNMMInferencePipeline():
         particles = particles[particle_features]
         return hits, particles
     
-    def convert_pyG(self, hits, particles, event_id = '005000001'):
+    def convert_pyG(self, hits, particles, event_id = '000'):
         particles = particles.rename(columns={"eta": "eta_particle"})
         hits, particles = self.reader._merge_particles_to_hits(hits, particles)
         hits = self.reader._add_handengineered_features(hits)
@@ -169,8 +169,8 @@ class GNNMMInferencePipeline():
 
         scores = torch.sigmoid(output)
         event.scores = scores.detach()
-
         event.to('cpu')
+        
         print("[Track building:]: building...")
         graph = self.track_builder._build_event(event)
         d = load_reconstruction_df(graph)
@@ -180,6 +180,7 @@ class GNNMMInferencePipeline():
         d = d[d.track_id >= 0].sort_values(["track_id", "r2"])
         # Make a dataframe of list of hits (one row = one list of hits, ie one track)
         tracks = d.groupby("track_id")["hit_id"].apply(list)
+        print("Done.")
 
         return tracks
     

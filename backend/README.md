@@ -19,7 +19,7 @@ tritonserver --model-repository=/workspace/backend/
 ### Client
 ``` bash 
 # client 
-podman-hpc run -it --rm --net=host -v ${PWD}:/workspace/ nvcr.io/nvidia/tritonserver:24.04-py3-sdk -v /global/cfs/cdirs/m3443/data/GNN4ITk-aaS/dev_mm/:/global/cfs/cdirs/m3443/data/GNN4ITk-aaS/dev_mm/ /bin/bash
+podman-hpc run -it --rm --net=host -v ${PWD}:/workspace/ -v /global/cfs/cdirs/m3443/data/GNN4ITk-aaS/dev_mm/:/global/cfs/cdirs/m3443/data/GNN4ITk-aaS/dev_mm/ nvcr.io/nvidia/tritonserver:24.04-py3-sdk /bin/bash
 
 python /workspace/backend/GNN4ITk_MM_Infer/client.py
 
