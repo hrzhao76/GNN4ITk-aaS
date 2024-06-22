@@ -1,3 +1,4 @@
+import time
 import torch 
 import pandas as pd 
 import numpy as np
@@ -156,42 +157,61 @@ class GNNMMInferencePipeline():
         theta = np.arctan2(r, z)
         return -1.0 * np.log(np.tan(theta / 2.0))
     
-    def forward(self, graph, hits):
+    def forward(self, graph, hits, record_time=False):
+        if record_time:
+            start_time = time.time()  
+
         # graph construction
         print("[Module Map]: building graphs...")
+        if record_time:
+            start = time.time()  
         graph = self.event_mm.preprocess_graph(graph)
         graph = self.module_map.build_graph(graph, hits)
+        if record_time:
+            print(f"Graph construction time: {time.time() - start:.2f} seconds") 
 
+        # edge classifier
         print("[GNN]: Forwarding...")
-        # edge classifier 
+        if record_time:
+            start = time.time()  
         event = self.graph_dataset.preprocess_event(graph)
         output = self.gnn_model.forward(event)
+        if record_time:
+            print(f"GNN forwarding time: {time.time() - start:.2f} seconds") 
 
+        if record_time:
+            start = time.time()  
         scores = torch.sigmoid(output)
         event.scores = scores.detach()
         event.to('cpu')
-        
-        print("[Track building:]: building...")
+        if record_time:
+            print(f"Activation and data handling time: {time.time() - start:.2f} seconds")  
+
+        # track building
+        print("[Track building]: building...")
+        if record_time:
+            start = time.time()  
         graph = self.track_builder._build_event(event)
         d = load_reconstruction_df(graph)
-        # include distance from origin to sort hits
         d["r2"] = (graph.r**2 + graph.z**2).cpu().numpy()
-        # Keep only hit_id associtated to a tracks (label >= 0, not -1), sort by track_id and r2
         d = d[d.track_id >= 0].sort_values(["track_id", "r2"])
-        # Make a dataframe of list of hits (one row = one list of hits, ie one track)
         tracks = d.groupby("track_id")["hit_id"].apply(list)
+        if record_time:
+            print(f"Track building time: {time.time() - start:.2f} seconds")  
+            print(f"Total execution time: {time.time() - start_time:.2f} seconds")  
+
         print("Done.")
 
         return tracks
-    
+
     def infer(self, graph_path, csv_truth_path):
         graph, hits  = self.load_data(graph_path, csv_truth_path)
         return self.forward(graph, hits)
     
-    def infer_csvonly(self, particles_path, csv_truth_path): 
+    def infer_csvonly(self, particles_path, csv_truth_path, record_time=False): 
         hits, particles = self.load_data_csvonly(particles_path, csv_truth_path)
         graph, hits  = self.convert_pyG(hits, particles)
-        return self.forward(graph, hits)
+        return self.forward(graph, hits, record_time)
 
 if __name__ == '__main__':
     event_name = 'event005000901'
@@ -203,7 +223,7 @@ if __name__ == '__main__':
     particles_path = input_folder + f"{event_name}-particles.csv"
     # tracks = pipeline.infer(graph_path, csv_truth_path)
     
-    tracks = pipeline.infer_csvonly(particles_path, csv_truth_path)
+    tracks = pipeline.infer_csvonly(particles_path, csv_truth_path, record_time=True) 
 
     print(f"Length of the tracks: {len(tracks)}")
     tracks.to_csv(f"{event_name}_reco_trks.txt")
