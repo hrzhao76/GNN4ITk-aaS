@@ -13,4 +13,4 @@
 #SBATCH --output=/global/homes/h/hrzhao/Projects/GNN4ITk-aaS/evaluation/slurm/slurm-%j/%j.out
 #SBATCH --error=/global/homes/h/hrzhao/Projects/GNN4ITk-aaS/evaluation/slurm/slurm-%j/%j.err
 
-srun shifter /global/homes/h/hrzhao/Projects/GNN4ITk-aaS/evaluation/run_server_n_perf_analyzer.sh --output-path /global/homes/h/hrzhao/Projects/GNN4ITk-aaS/evaluation/slurm/slurm-$SLURM_JOB_ID/log.txt --concurrency-range "1:4:1"
+srun shifter /global/homes/h/hrzhao/Projects/GNN4ITk-aaS/evaluation/run_server_n_perf_analyzer.sh --output-path /global/homes/h/hrzhao/Projects/GNN4ITk-aaS/evaluation/slurm/slurm-$SLURM_JOB_ID/ --concurrency-range "1:4:1"
